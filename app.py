@@ -24,16 +24,19 @@ This tool helps you quickly analyze mockup ad performance from Facebook Ad repor
 All processing happens in your browser session. The file is cleared from memory after download.
 """)
 
-# Step 1 - File Upload
+# Step 1 - Custom Upload UI
 st.subheader("Step 1: Upload Your File")
+
+st.markdown("📁 **Click below to upload your Excel ad report**")
+st.caption("*(Drag-and-drop may not work reliably in all browsers)*")
+
 uploaded_file = st.file_uploader(
-    "Click to browse and upload your Excel file",
+    label="",
     type=["xlsx"],
     key=st.session_state.upload_key
 )
-st.caption("🔒 Your file is processed in-memory only and never stored. You can remove it anytime by clicking the ❌.")
 
-# Step 2 - CPC Selector (shows after upload)
+# Step 2 - CPC Selector (after file uploaded)
 if uploaded_file:
     st.subheader("Step 2: Select CPC Threshold")
     cpc_threshold = st.selectbox(
@@ -42,7 +45,6 @@ if uploaded_file:
         index=0
     )
 
-    # Only process if user selected an actual CPC threshold
     if isinstance(cpc_threshold, float):
         try:
             df = pd.read_excel(uploaded_file)
@@ -61,9 +63,7 @@ if uploaded_file:
                 st.error(f"🚫 The uploaded file is missing required columns: {', '.join(missing)}")
                 st.stop()
 
-            # Step 3 - Process Ads
-            st.subheader("Step 3: Review Flagged Results")
-
+            # Evaluate ads
             def evaluate_ad(row):
                 spend = row['Amount spent (USD)']
                 ctr = row['CTR (all)']
@@ -85,7 +85,7 @@ if uploaded_file:
 
             df[['Kill Criteria Met? (Y/N)', 'Action Taken']] = df.apply(evaluate_ad, axis=1, result_type='expand')
 
-            # Prepare final review table
+            # Prepare output DataFrame
             review = pd.DataFrame({
                 "Date of Report": [date.today()] * len(df),
                 "Ad Name": df["Ad name"],
@@ -100,10 +100,29 @@ if uploaded_file:
                 "Notes": ["" for _ in range(len(df))]
             })
 
+            # Summary Stats
+            st.subheader("📊 Summary")
+            total_ads = len(review)
+            flagged = review["Kill Criteria Met? (Y/N)"].value_counts().get("Y", 0)
+            flagged_df = review[review["Kill Criteria Met? (Y/N)"] == "Y"]
+            total_flagged_spend = flagged_df["Amount Spent (USD)"].sum()
+            avg_flagged_ctr = (
+                flagged_df["CTR (%)"].replace("N/A", pd.NA).dropna().astype(float).mean()
+            )
+
+            st.markdown(f"""
+            - **Total Ads Reviewed:** {total_ads}  
+            - **Ads Flagged:** {flagged}  
+            - **Total Spend (Flagged Ads):** ${total_flagged_spend:.2f}  
+            - **Average CTR (Flagged Ads):** {avg_flagged_ctr:.2f}%
+            """)
+
+            # Show the results table
+            st.subheader("Step 3: Review Flagged Results")
             st.success("✅ Review Sheet Generated!")
             st.dataframe(review)
 
-            # Step 4 - Download
+            # Download section
             st.subheader("Step 4: Download Your Review Sheet")
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
