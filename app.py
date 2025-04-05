@@ -3,13 +3,11 @@ import pandas as pd
 from datetime import date
 import io
 
-# Set Streamlit page config
+# Set page config
 st.set_page_config(page_title="Mockup Ad Review", layout="centered")
 
-# Title
+# Title and Intro
 st.title("📊 Weekly Mockup Ad Performance Review")
-
-# On-screen explanation + privacy statement
 st.markdown("""
 This tool helps you quickly analyze mockup ad performance from Facebook Ad reports.
 
@@ -45,10 +43,9 @@ if uploaded_file:
             st.error(f"🚫 The uploaded file is missing required columns: {', '.join(missing)}")
             st.stop()
 
-        # Step 2 - Review results
+        # Step 2 - Review Results
         st.subheader("Step 2: Review Flagged Results")
 
-        # Evaluate ads
         def evaluate_ad(row):
             spend = row['Amount spent (USD)']
             ctr = row['CTR (all)']
@@ -70,14 +67,14 @@ if uploaded_file:
 
         df[['Kill Criteria Met? (Y/N)', 'Action Taken']] = df.apply(evaluate_ad, axis=1, result_type='expand')
 
-        # Build final review DataFrame
+        # Build final review sheet
         review = pd.DataFrame({
             "Date of Report": [date.today()] * len(df),
             "Ad Name": df["Ad name"],
             "Amount Spent (USD)": df["Amount spent (USD)"],
-            "CTR (%)": df["CTR (all)"],
-            "Link Clicks": df["Link clicks"],
-            "CPC (USD)": df["CPC (cost per link click) (USD)"],
+            "CTR (%)": df["CTR (all)"].apply(lambda x: round(x, 2) if pd.notna(x) else "N/A"),
+            "Link Clicks": df["Link clicks"].fillna("N/A"),
+            "CPC (USD)": df["CPC (cost per link click) (USD)"].apply(lambda x: round(x, 2) if pd.notna(x) else "N/A"),
             "Conversions (Purchases)": df["Purchase ROAS (return on ad spend)"].apply(lambda x: "N/A" if pd.isna(x) else x),
             "ROAS": df["Purchase ROAS (return on ad spend)"],
             "Kill Criteria Met? (Y/N)": df["Kill Criteria Met? (Y/N)"],
@@ -85,15 +82,12 @@ if uploaded_file:
             "Notes": ["" for _ in range(len(df))]
         })
 
-        # Clean up NaN for display
-        review.fillna("N/A", inplace=True)
-
-        with st.spinner("Generating your review sheet..."):
-            st.success("✅ Review Sheet Generated!")
-            st.dataframe(review)
+        st.success("✅ Review Sheet Generated!")
+        st.dataframe(review)
 
         # Step 3 - Download
         st.subheader("Step 3: Download Your Review Sheet")
+
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             review.to_excel(writer, index=False, sheet_name='Weekly Review')
@@ -104,6 +98,10 @@ if uploaded_file:
             file_name="Weekly_Review.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+        st.markdown("✅ Done reviewing this file?")
+        if st.button("🔄 Start Over / Upload Another File"):
+            st.experimental_rerun()
 
     except Exception as e:
         st.error(f"⚠️ Something went wrong while processing the file: {e}")
