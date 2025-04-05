@@ -6,7 +6,7 @@ import io
 # Set page config
 st.set_page_config(page_title="Mockup Ad Review", layout="centered")
 
-# Title and Intro
+# Title and explanation
 st.title("📊 Weekly Mockup Ad Performance Review")
 st.markdown("""
 This tool helps you quickly analyze mockup ad performance from Facebook Ad reports.
@@ -22,7 +22,11 @@ All processing happens in your browser session. The file is cleared from memory 
 
 # Step 1 - Upload
 st.subheader("Step 1: Upload Your File")
-uploaded_file = st.file_uploader("Click to browse and upload your Excel file", type=["xlsx"])
+uploaded_file = st.file_uploader(
+    "Click to browse and upload your Excel file",
+    type=["xlsx"],
+    key="uploader"
+)
 st.caption("🔒 Your file is processed in-memory only and never stored. You can remove it anytime by clicking the ❌.")
 
 if uploaded_file:
@@ -67,7 +71,7 @@ if uploaded_file:
 
         df[['Kill Criteria Met? (Y/N)', 'Action Taken']] = df.apply(evaluate_ad, axis=1, result_type='expand')
 
-        # Build final review sheet
+        # Build final output
         review = pd.DataFrame({
             "Date of Report": [date.today()] * len(df),
             "Ad Name": df["Ad name"],
@@ -101,6 +105,7 @@ if uploaded_file:
 
         st.markdown("✅ Done reviewing this file?")
         if st.button("🔄 Start Over / Upload Another File"):
+            st.session_state.pop("uploader", None)
             st.rerun()
 
     except Exception as e:
