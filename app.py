@@ -22,7 +22,7 @@ All processing happens in your browser session. The file is cleared from memory 
 
 # Step 1 - Upload
 st.subheader("Step 1: Upload Your File")
-uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
+uploaded_file = st.file_uploader("Click to browse and upload your Excel file", type=["xlsx"])
 st.caption("🔒 Your file is processed in-memory only and never stored. You can remove it anytime by clicking the ❌.")
 
 if uploaded_file:
@@ -101,7 +101,7 @@ if uploaded_file:
 
         st.markdown("✅ Done reviewing this file?")
         if st.button("🔄 Start Over / Upload Another File"):
-            st.experimental_rerun()
+            st.rerun()
 
     except Exception as e:
         st.error(f"⚠️ Something went wrong while processing the file: {e}")
