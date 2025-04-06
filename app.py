@@ -66,7 +66,7 @@ if uploaded_file:
         roas = row["Purchase ROAS (return on ad spend)"]
 
         if ad_stage == "Mockup":
-            if not (spend > 5 and clicks >= 5):
+            if not (spend > 5 and pd.notna(clicks) and clicks >= 5):
                 return "N", "Keep"
             if pd.isna(ctr) or ctr < 0.0075:
                 return "Y", "Low CTR"
