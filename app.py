@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import io
+from openpyxl.styles import PatternFill
 
 # Page config
-st.set_page_config(page_title="Mockup Ad Review", layout="centered")
+st.set_page_config(page_title="Mockup Ad Performance Review", layout="centered")
 
 # Session state keys
 if "upload_key" not in st.session_state:
@@ -96,7 +97,7 @@ if uploaded_file:
                 "Conversions (Purchases)": df["Purchase ROAS (return on ad spend)"].apply(lambda x: "N/A" if pd.isna(x) else x),
                 "ROAS": df["Purchase ROAS (return on ad spend)"],
                 "Kill Criteria Met? (Y/N)": df["Kill Criteria Met? (Y/N)"],
-                "Action Taken": df["Action Taken"],
+                "Action to Take": df["Action Taken"],
                 "Notes": ["" for _ in range(len(df))]
             })
 
@@ -117,16 +118,36 @@ if uploaded_file:
             - **Average CTR (Flagged Ads):** {avg_flagged_ctr:.2f}%
             """)
 
-            # Show the results table
+            # Show color-coded results table
+            def highlight_row(row):
+                if row['Kill Criteria Met? (Y/N)'] == 'Y':
+                    return ['background-color: #ffe6e6'] * len(row)
+                else:
+                    return ['background-color: #e6ffe6'] * len(row)
+
+            styled_review = review.style.apply(highlight_row, axis=1)
+
             st.subheader("Step 3: Review Flagged Results")
             st.success("✅ Review Sheet Generated!")
-            st.dataframe(review)
+            st.dataframe(styled_review)
 
-            # Download section
+            # Download section with color formatting
             st.subheader("Step 4: Download Your Review Sheet")
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                review.to_excel(writer, index=False, sheet_name='Weekly Review')
+                review.to_excel(writer, index=False, sheet_name='Ad Review')
+                workbook = writer.book
+                worksheet = writer.sheets['Ad Review']
+
+                # Apply color formatting
+                kill_col_idx = review.columns.get_loc("Kill Criteria Met? (Y/N)") + 1
+                fill_red = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
+                fill_green = PatternFill(start_color="E6FFE6", end_color="E6FFE6", fill_type="solid")
+
+                for row_idx, value in enumerate(review["Kill Criteria Met? (Y/N)"], start=2):
+                    fill = fill_red if value == "Y" else fill_green
+                    for col in range(1, len(review.columns) + 1):
+                        worksheet.cell(row=row_idx, column=col).fill = fill
 
             st.download_button(
                 label="📥 Download Mockup Ad Review Sheet",
