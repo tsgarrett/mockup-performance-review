@@ -4,10 +4,42 @@ from datetime import date
 import io
 from openpyxl.styles import PatternFill
 
-# Page config
-st.set_page_config(page_title="Mockup Ad Performance Review", layout="centered")
+# Detailed recommendations mapping
+detailed_recommendations = {
+    "Pause ad, no engagement": (
+        "Ad has spent over $5 with no measurable engagement. Pause it. "
+        "Try testing a completely new angle, bold creative, or scroll-stopping headline. "
+        "[Ref: Stage 4 – 04:12:45]"
+    ),
+    "Low CTR, rework creative": (
+        "CTR is under 0.75% after $5. Focus on increasing click-through rate. "
+        "Test new creatives, play with curiosity or emotional hooks, and avoid blending in. "
+        "[Ref: Stage 4 – 04:20:03]"
+    ),
+    "High CPC": (
+        "CPC is too high. Tighten your audience or broaden it if it's too narrow. "
+        "Try adjusting placements or using simpler ad creative to improve cost-efficiency. "
+        "[Ref: Stage 4 – 04:31:50]"
+    ),
+    "Low clicks, pause or test variation": (
+        "Fewer than 3 clicks after $5 suggests weak messaging or visual. "
+        "Test different copy formats (e.g., Q&A, bold claims) or more striking visuals. "
+        "[Ref: Stage 4 – 04:25:10]"
+    ),
+    "No conversions, review funnel": (
+        "ROAS is 0 after $15 spend. Investigate product page conversion rate, offer clarity, "
+        "checkout friction, and post-click messaging. Add urgency if missing. "
+        "[Ref: Stage 5 – 05:02:17]"
+    ),
+    "Keep running": (
+        "This ad is currently performing well. Continue monitoring and scale gradually. "
+        "Consider duplicating into new ad sets to test audience expansion. "
+        "[Ref: Stage 5 – 05:14:03]"
+    )
+}
 
-# Session state keys
+# Streamlit config
+st.set_page_config(page_title="Mockup Ad Performance Review", layout="centered")
 if "upload_key" not in st.session_state:
     st.session_state.upload_key = 0
 
@@ -25,19 +57,11 @@ This tool helps you quickly analyze mockup ad performance from Facebook Ad repor
 All processing happens in your browser session. The file is cleared from memory after download.
 """)
 
-# Step 1 - Custom Upload UI
 st.subheader("Step 1: Upload Your File")
-
 st.markdown("📁 **Click below to upload your Excel ad report**")
 st.caption("*(Drag-and-drop may not work reliably in all browsers)*")
+uploaded_file = st.file_uploader("", type=["xlsx"], key=st.session_state.upload_key)
 
-uploaded_file = st.file_uploader(
-    label="",
-    type=["xlsx"],
-    key=st.session_state.upload_key
-)
-
-# Step 2 - CPC Selector (after file uploaded)
 if uploaded_file:
     st.subheader("Step 2: Select CPC Threshold")
     cpc_threshold = st.selectbox(
@@ -50,7 +74,6 @@ if uploaded_file:
         try:
             df = pd.read_excel(uploaded_file)
 
-            # Validate required columns
             required_cols = [
                 "Ad name",
                 "Amount spent (USD)",
@@ -64,7 +87,6 @@ if uploaded_file:
                 st.error(f"🚫 The uploaded file is missing required columns: {', '.join(missing)}")
                 st.stop()
 
-            # Evaluate ads
             def evaluate_ad(row):
                 spend = row['Amount spent (USD)']
                 ctr = row['CTR (all)']
@@ -86,7 +108,6 @@ if uploaded_file:
 
             df[['Kill Criteria Met? (Y/N)', 'Action Taken']] = df.apply(evaluate_ad, axis=1, result_type='expand')
 
-            # Prepare output DataFrame
             review = pd.DataFrame({
                 "Date of Report": [date.today()] * len(df),
                 "Ad Name": df["Ad name"],
@@ -101,15 +122,21 @@ if uploaded_file:
                 "Notes": ["" for _ in range(len(df))]
             })
 
-            # Summary Stats
+            # Add expanded recommendations
+            review["Detailed Recommendation"] = review["Action to Take"].apply(
+                lambda action: detailed_recommendations.get(
+                    action if not action.startswith("High CPC") else "High CPC",
+                    "No recommendation available."
+                )
+            )
+
+            # Summary
             st.subheader("📊 Summary")
             total_ads = len(review)
             flagged = review["Kill Criteria Met? (Y/N)"].value_counts().get("Y", 0)
             flagged_df = review[review["Kill Criteria Met? (Y/N)"] == "Y"]
             total_flagged_spend = flagged_df["Amount Spent (USD)"].sum()
-            avg_flagged_ctr = (
-                flagged_df["CTR (%)"].replace("N/A", pd.NA).dropna().astype(float).mean()
-            )
+            avg_flagged_ctr = flagged_df["CTR (%)"].replace("N/A", pd.NA).dropna().astype(float).mean()
 
             st.markdown(f"""
             - **Total Ads Reviewed:** {total_ads}  
@@ -118,29 +145,18 @@ if uploaded_file:
             - **Average CTR (Flagged Ads):** {avg_flagged_ctr:.2f}%
             """)
 
-            # Show color-coded results table
             def highlight_row(row):
-                if row['Kill Criteria Met? (Y/N)'] == 'Y':
-                    return ['background-color: #ffe6e6'] * len(row)
-                else:
-                    return ['background-color: #e6ffe6'] * len(row)
-
-            styled_review = review.style.apply(highlight_row, axis=1)
+                return ['background-color: #ffe6e6'] * len(row) if row['Kill Criteria Met? (Y/N)'] == 'Y' else ['background-color: #e6ffe6'] * len(row)
 
             st.subheader("Step 3: Review Flagged Results")
             st.success("✅ Review Sheet Generated!")
-            st.dataframe(styled_review)
+            st.dataframe(review.style.apply(highlight_row, axis=1))
 
-            # Download section with color formatting
             st.subheader("Step 4: Download Your Review Sheet")
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 review.to_excel(writer, index=False, sheet_name='Ad Review')
-                workbook = writer.book
                 worksheet = writer.sheets['Ad Review']
-
-                # Apply color formatting
-                kill_col_idx = review.columns.get_loc("Kill Criteria Met? (Y/N)") + 1
                 fill_red = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
                 fill_green = PatternFill(start_color="E6FFE6", end_color="E6FFE6", fill_type="solid")
 
@@ -156,7 +172,6 @@ if uploaded_file:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            st.markdown("✅ Done reviewing this file?")
             if st.button("🔄 Start Over / Upload Another File"):
                 st.session_state.upload_key += 1
                 st.rerun()
