@@ -8,6 +8,7 @@ from openpyxl.styles import PatternFill
 recommendations_by_stage = {
     "Mockup": {
         "Low CTR": "CTR is under 0.75%. Test radically different visuals or curiosity-driven headlines. [Ref: Stage 3 – 03:45:10]",
+        "High CPC": "CPC above threshold in mockup phase. Consider stronger hooks or clearer visual cues. [Ref: Stage 3 – 03:52:10]",
         "No engagement": "No engagement after $5. Kill ad and test a fresh creative angle. [Ref: Stage 3 – 03:49:22]",
         "Keep": "CTR is strong. Consider moving into Cycle 1 to test targeting. [Ref: Stage 3 – 03:58:00]"
     },
@@ -39,11 +40,11 @@ ad_stage = st.radio("What type of ads are you reviewing?", ["Mockup", "Cycle 1",
 st.subheader("Step 1: Upload Your File")
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"], key=st.session_state.upload_key)
 
-# Dynamic CPC threshold selector (only for Cycle 1 or 2)
-if ad_stage in ["Cycle 1", "Cycle 2"]:
-    cpc_threshold = st.selectbox("Select your CPC threshold ($)", [1.00, 1.25, 1.50, 1.75, 2.00])
-else:
-    cpc_threshold = None
+# CPC threshold selector (now for all stages)
+cpc_threshold = st.selectbox(
+    "Select your CPC threshold ($)",
+    [0.75, 1.00, 1.25, 1.50, 1.75, 2.00]
+)
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
@@ -65,8 +66,13 @@ if uploaded_file:
         roas = row["Purchase ROAS (return on ad spend)"]
 
         if ad_stage == "Mockup":
-            if spend > 5 and (pd.isna(ctr) or ctr < 0.0075):
-                return "Y", "Low CTR"
+            if spend > 5 and clicks >= 5:
+                if pd.isna(ctr) or ctr < 0.0075:
+                    return "Y", "Low CTR"
+                elif cpc_threshold and cpc > cpc_threshold:
+                    return "Y", "High CPC"
+                else:
+                    return "N", "Keep"
             else:
                 return "N", "Keep"
         elif ad_stage == "Cycle 1":
