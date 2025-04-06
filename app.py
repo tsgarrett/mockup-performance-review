@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import date
 import io
 from openpyxl.styles import PatternFill
-import plotly.express as px
 
 # Page config
 st.set_page_config(page_title="Mockup Ad Performance Review", layout="centered")
@@ -118,34 +117,6 @@ if uploaded_file:
             - **Total Spend (Flagged Ads):** ${total_flagged_spend:.2f}  
             - **Average CTR (Flagged Ads):** {avg_flagged_ctr:.2f}%
             """)
-
-            # Visualization: CPC vs CTR Scatter Plot
-            st.subheader("📉 CPC vs CTR Scatter Plot")
-            scatter_data = df.copy()
-            scatter_data = scatter_data.dropna(subset=["CTR (all)", "CPC (cost per link click) (USD)"])
-            st.plotly_chart(
-                px.scatter(
-                    scatter_data,
-                    x="CPC (cost per link click) (USD)",
-                    y="CTR (all)",
-                    color="Kill Criteria Met? (Y/N)",
-                    hover_data=["Ad name", "Amount spent (USD)"],
-                    title="CPC vs CTR"
-                ),
-                use_container_width=True
-            )
-
-            # Visualization: Histogram of Amount Spent
-            st.subheader("💰 Distribution of Ad Spend")
-            st.plotly_chart(
-                px.histogram(
-                    df,
-                    x="Amount spent (USD)",
-                    nbins=15,
-                    title="Distribution of Ad Spend"
-                ),
-                use_container_width=True
-            )
 
             # Show color-coded results table
             def highlight_row(row):
