@@ -38,6 +38,18 @@ if "upload_key" not in st.session_state:
 st.title("📊 Ad Performance Review")
 st.markdown("A stage-aware review tool that adapts recommendations based on your campaign phase.")
 
+# --- ADDED DISCLAIMER ---
+st.info(
+    """
+    **Disclaimer:** This tool is intended as an **aid** to your ad review process and should complement, **not replace**, your own judgment and analysis.
+    It was created by a member for members and is **not an official product of, nor endorsed by, the WeScale Group Founders.**
+    Always consider the full context of your campaigns when making decisions.
+    """,
+    icon="ℹ️"
+)
+# --- END DISCLAIMER ---
+
+
 # --- User Inputs ---
 
 # Step 0: Choose Ad Stage
