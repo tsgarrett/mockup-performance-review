@@ -66,30 +66,29 @@ if uploaded_file:
         roas = row["Purchase ROAS (return on ad spend)"]
 
         if ad_stage == "Mockup":
-            if spend > 5 and clicks >= 5:
-                if pd.isna(ctr) or ctr < 0.0075:
+        if not (spend > 5 and clicks >= 5):
+            return "N", "Keep"
+        if pd.isna(ctr) or ctr < 0.0075:
+            return "Y", "Low CTR"
+        elif cpc_threshold and cpc > cpc_threshold:
+            return "Y", "High CPC"
+        else:
+            return "N", "Keep"
                     return "Y", "Low CTR"
-                elif cpc_threshold and cpc > cpc_threshold:
                     return "Y", "High CPC"
-                else:
                     return "N", "Keep"
-            else:
                 return "N", "Keep"
         elif ad_stage == "Cycle 1":
             if spend > 5 and (pd.isna(ctr) or ctr < 0.0075):
                 return "Y", "Low CTR"
-            elif cpc_threshold and cpc > cpc_threshold:
                 return "Y", "High CPC"
-            else:
                 return "N", "Keep"
         elif ad_stage == "Cycle 2":
             if spend > 5 and (pd.isna(ctr) or ctr < 0.0075):
                 return "Y", "Low CTR"
-            elif cpc_threshold and cpc > cpc_threshold:
                 return "Y", "High CPC"
             elif spend > 15 and (pd.isna(roas) or roas == 0):
                 return "Y", "No ROAS"
-            else:
                 return "N", "Keep"
         return "N", "Keep"
 
