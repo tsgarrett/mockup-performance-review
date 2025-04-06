@@ -4,23 +4,22 @@ from datetime import date
 import io
 from openpyxl.styles import PatternFill
 
-# UPDATED Recommendations mapping based on new stage logic
+# Recommendations mapping - reflecting the default formula outcomes
 recommendations_by_stage = {
     "Mockup": {
-        "High CPC": "CPC is at or above threshold after $5 spend. Visual may not be appealing enough. Test new mockups.",
-        "Keep": "CPC is below threshold ($1 target) after $5 spend. Good candidate visual.",
-        # "Insufficient Data" handled separately
+        "Fail": "Did not meet criteria based on thresholds set (Default: Spend ≥ $5 AND CPC < $1).",
+        "Keep": "✅ Meets criteria based on thresholds set (Default: Spend ≥ $5 AND CPC < $1). Good candidate visual.",
+        "Insufficient Data": "Spend is below the minimum threshold for evaluation.",
     },
     "Cycle 1": {
-        "High CPC": "CPC is at or above threshold after $5 spend. Ad may not resonate broadly. Consider pausing or testing different angles.",
-        "Keep": "CPC is below threshold ($1 target) after $5 spend. Good signal for broad appeal.",
-        # "Insufficient Data" handled separately
+        "Fail": "Did not meet criteria based on thresholds set (Default: Spend ≥ $5 AND CPC < $1).",
+        "Keep": "✅ Meets criteria based on thresholds set (Default: Spend ≥ $5 AND CPC < $1). Good signal for broad appeal.",
+        "Insufficient Data": "Spend is below the minimum threshold for evaluation.",
     },
     "Cycle 2": {
-        "No Purchases": "Spent over $15 but no purchases recorded (ROAS <= 0). Ad is not converting. Pause this ad.",
-        "High CPC (Converting)": "Ad is converting (ROAS > 0), but CPC is high. Monitor profitability closely or test optimizations.",
-        "Keep": "Ad is converting (ROAS > 0) with acceptable CPC. Strong performer.",
-        # "Insufficient Data" handled separately
+        "Fail": "Did not meet criteria based on thresholds set (Default: Spend ≥ $10 AND CPC < $1 AND Purchases ≥ 1).",
+        "Keep": "✅ Meets criteria based on thresholds set (Default: Spend ≥ $10 AND CPC < $1 AND Purchases ≥ 1). Potential winner.",
+        "Insufficient Data": "Spend is below the minimum threshold for evaluation.",
     }
 }
 
@@ -30,7 +29,7 @@ if "upload_key" not in st.session_state:
     st.session_state.upload_key = 0
 
 st.title("📊 Ad Performance Review")
-st.markdown("A stage-aware review tool adapting recommendations based on the WeScale testing methodology.")
+st.markdown("Applies the WeScale testing formulas with stage-specific defaults, allowing adjustments.")
 
 # --- Disclaimer ---
 st.info(
@@ -50,51 +49,69 @@ st.info(
 ad_stage = st.radio(
     "Select Ad Stage:",
     ["Mockup", "Cycle 1", "Cycle 2"],
-    horizontal=True
+    horizontal=True,
+    help="Select the stage corresponding to the ads in your uploaded file. Defaults will adjust below."
 )
 
-st.subheader("Step 1: Define Evaluation Thresholds")
+st.subheader("Step 1: Adjust Evaluation Criteria (Defaults Set by Stage)")
 
-# Use columns for better layout
+# --- Determine Defaults Based on Stage ---
+if ad_stage == "Mockup" or ad_stage == "Cycle 1":
+    default_cpc_index = 2 # Index for $1.00
+    default_initial_spend = 5.0
+    default_cycle2_spend = 10.0 # Keep a sensible default even if not primary
+elif ad_stage == "Cycle 2":
+    default_cpc_index = 2 # Index for $1.00
+    default_initial_spend = 5.0 # Keep a sensible default
+    default_cycle2_spend = 10.0
+else: # Fallback (shouldn't happen)
+    default_cpc_index = 2
+    default_initial_spend = 5.0
+    default_cycle2_spend = 10.0
+
+# --- Input Widgets with Dynamic Defaults ---
 col1, col2 = st.columns(2)
 
 with col1:
-    # CPC threshold selector - Defaulting to $1.00 as per Mockup/C1 rules
     cpc_threshold = st.selectbox(
-        "Maximum Acceptable CPC ($)",
-        [0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.50, 3.00, 5.00],
-        index=2, # Default to 1.00
-        help="Mockup & Cycle 1 typically aim for sub-$1 CPC. Cycle 2 considers this alongside conversions."
+        "CPC Threshold (< $)",
+        options=[0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.50, 3.00, 5.00],
+        index=default_cpc_index, # Set default based on stage
+        help="Ad CPC must be STRICTLY LESS THAN this value. Default is $1.00."
     )
-    # Spend threshold for Cycle 2 ROAS evaluation
-    cycle2_spend_threshold = st.number_input(
-        "Spend threshold for Cycle 2 eval ($)",
-        min_value=0.0,
-        value=15.0, # Default based on previous logic, aligns with needing spend for purchase data
-        step=1.00,
-        format="%.2f",
-        help="Minimum spend before evaluating Cycle 2 ads for purchase performance (ROAS)."
-    )
+    # Purchase check explanation (no widget needed, uses ROAS > 0)
+    if ad_stage == "Cycle 2":
+         st.caption("Purchase check requires ROAS > 0 in data.")
+         # Placeholder to balance columns
+         st.container()
+
 
 with col2:
-    # Spend threshold for initial evaluation (Mockup, Cycle 1)
+    # Separate spend thresholds for clarity, using stage-based defaults
     initial_spend_threshold = st.number_input(
-        "Spend threshold for Mockup/Cycle 1 eval ($)",
+        "Min Spend Mockup/Cycle 1 ($)",
         min_value=0.0,
-        value=5.0, # Default based on rules
+        value=default_initial_spend, # Set default based on stage logic
         step=0.50,
         format="%.2f",
-        help="Minimum spend before evaluating Mockup & Cycle 1 ads for CPC."
+        help="Minimum spend before evaluating Mockup & Cycle 1 ads. Default: $5.00"
+    )
+    cycle2_spend_threshold = st.number_input(
+        "Min Spend Cycle 2 ($)",
+        min_value=0.0,
+        value=default_cycle2_spend, # Set default based on stage logic
+        step=1.00,
+        format="%.2f",
+        help="Minimum spend before evaluating Cycle 2 ads. Default: $10.00"
     )
 
 
 st.subheader("Step 2: Upload Your File")
-# Updated note about required columns
 st.markdown(
     """
     **Core Required Columns:** `Ad name`, `Amount spent (USD)`, `CPC (cost per link click) (USD)`, `Purchase ROAS (return on ad spend)`.
 
-    *Note: `Link clicks` and `CTR (link click-through rate)` are included in the output table for informational context if present in your file, but are not used in the primary decision logic based on the current rules.*
+    *Note: `Link clicks` and `CTR (link click-through rate)` can be included for informational context.*
     """
 )
 uploaded_file = st.file_uploader(
@@ -107,16 +124,14 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file)
-        # UPDATED required_cols list based on new logic
         # Core columns needed for logic:
         core_required_cols = [
             "Ad name", "Amount spent (USD)",
             "CPC (cost per link click) (USD)",
-            "Purchase ROAS (return on ad spend)"
+            "Purchase ROAS (return on ad spend)" # Used for Purchase check in Cycle 2
         ]
         # Optional columns for display:
         optional_cols = ["Link clicks", "CTR (link click-through rate)"]
-        all_expected_cols = core_required_cols + optional_cols
 
         # Check for core required columns
         missing_core = [col for col in core_required_cols if col not in df.columns]
@@ -124,137 +139,113 @@ if uploaded_file:
             st.error(f"Missing CORE required columns needed for logic: {', '.join(missing_core)}")
             st.stop()
 
-        # Check for optional columns and note if missing (won't stop execution)
+        # Check for optional columns
         missing_optional = [col for col in optional_cols if col not in df.columns]
         if missing_optional:
-            st.caption(f"Note: Optional columns for display not found: {', '.join(missing_optional)}. They won't appear in the output table.")
+            st.caption(f"Note: Optional columns for display not found: {', '.join(missing_optional)}.")
 
-        # Identify columns to convert to numeric (only those present)
-        cols_to_convert = [
-            "Amount spent (USD)", "CPC (cost per link click) (USD)", "Purchase ROAS (return on ad spend)"
-        ]
-        # Add optional numeric columns if they exist
-        if "Link clicks" in df.columns:
-            cols_to_convert.append("Link clicks")
-        if "CTR (link click-through rate)" in df.columns:
-            cols_to_convert.append("CTR (link click-through rate)")
+        # Identify columns to convert to numeric
+        cols_to_convert = core_required_cols[1:] # Skip 'Ad name'
+        if "Link clicks" in df.columns: cols_to_convert.append("Link clicks")
+        if "CTR (link click-through rate)" in df.columns: cols_to_convert.append("CTR (link click-through rate)")
 
-        # Ensure numeric types where necessary, coerce errors to NaN
+        # Ensure numeric types
         for col in cols_to_convert:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+             if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
 
-        # --- UPDATED Evaluation Function (Based on New Stage Rules) ---
+        # --- Evaluation Function (Using Widget Values) ---
         def evaluate(row):
             spend = row["Amount spent (USD)"]
             cpc = row["CPC (cost per link click) (USD)"]
             roas = row["Purchase ROAS (return on ad spend)"]
-            # Clicks and CTR are not used in logic but available if needed later
-            # clicks = row.get("Link clicks", None) # Use .get for optional cols
-            # ctr = row.get("CTR (link click-through rate)", None)
+
+            # Conditions based on WIDGET values
+            # Note: Using the user-selected CPC threshold from the selectbox
+            is_cpc_valid = pd.notna(cpc) and cpc < cpc_threshold
+            has_purchase = pd.notna(roas) and roas > 0
 
             if ad_stage == "Mockup":
-                # 1. Check Spend Validity
+                # Using the user-selected initial_spend_threshold from number_input
                 if spend < initial_spend_threshold:
                     return "N", "Insufficient Data"
-                # 2. Check Primary Metric: CPC
-                # Treat NaN CPC as failing the threshold
-                if pd.isna(cpc) or cpc >= cpc_threshold:
-                    return "Y", "High CPC"
-                # 3. Else (Spend >= threshold AND CPC < threshold)
-                else:
+                if is_cpc_valid: # Pass if CPC is valid
                     return "N", "Keep"
+                else: # Fail if CPC is invalid
+                    return "Y", "Fail"
 
             elif ad_stage == "Cycle 1":
-                # Logic is identical to Mockup based on description
-                # 1. Check Spend Validity
+                 # Using the user-selected initial_spend_threshold
                 if spend < initial_spend_threshold:
                     return "N", "Insufficient Data"
-                # 2. Check Primary Metric: CPC
-                if pd.isna(cpc) or cpc >= cpc_threshold:
-                    return "Y", "High CPC"
-                # 3. Else (Spend >= threshold AND CPC < threshold)
-                else:
+                if is_cpc_valid: # Pass if CPC is valid
                     return "N", "Keep"
+                else: # Fail if CPC is invalid
+                    return "Y", "Fail"
 
             elif ad_stage == "Cycle 2":
-                # 1. Check Spend Validity
+                 # Using the user-selected cycle2_spend_threshold
                 if spend < cycle2_spend_threshold:
                     return "N", "Insufficient Data"
-                # 2. Check Primary Metric: Conversions (ROAS > 0)
-                if pd.isna(roas) or roas <= 0:
-                    # Hasn't converted after enough spend
-                    return "Y", "No Purchases"
-                # 3. Else (Has Converted - ROAS > 0)
-                else:
-                    # Check Secondary Metric: CPC
-                    if pd.isna(cpc) or cpc >= cpc_threshold:
-                         # Converting, but CPC is high
-                        return "Y", "High CPC (Converting)"
-                    else:
-                        # Converting and CPC is acceptable
-                        return "N", "Keep"
+                # Check winner condition: Spend OK, CPC OK, Purchase OK
+                if is_cpc_valid and has_purchase:
+                    return "N", "Keep"
+                else: # Fail if any condition not met
+                    return "Y", "Fail"
 
-            # Fallback (should not be reached)
+            # Fallback
             return "N", "Review Manually"
 
         # Apply the evaluation function
-        df[["Kill Criteria Met? (Y/N)", "Flag Reason"]] = df.apply(evaluate, axis=1, result_type="expand")
+        df[["Flagged? (Y/N)", "Result"]] = df.apply(evaluate, axis=1, result_type="expand")
 
-        # Define UPDATED Action mapping based on new flags
+        # Define Action mapping
         action_mapping = {
-            "Keep": "Keep Running",
+            "Keep": "Keep Running (Pass)",
             "Insufficient Data": "Keep Running (Monitor)",
-            "High CPC": "Pause/Review", # Flagged in Mockup/C1
-            "No Purchases": "Pause/Kill", # Flagged in C2
-            "High CPC (Converting)": "Optimize/Review", # Flagged in C2 but converting
+            "Fail": "Pause/Review (Fail)",
             "Review Manually": "Review Manually"
         }
 
         # --- Prepare Output DataFrame ---
-        # Build the dict dynamically based on available columns
         review_data = {
             "Date of Report": [date.today().strftime("%Y-%m-%d")] * len(df),
             "Ad Name": df["Ad name"],
             "Amount Spent (USD)": df["Amount spent (USD)"].round(2),
-            # Optional: Link CTR
+            # Optional Columns
             "Link CTR (%)": df["CTR (link click-through rate)"].apply(lambda x: f"{x*100:.2f}%" if pd.notna(x) else "N/A") if "CTR (link click-through rate)" in df.columns else ["N/A"] * len(df),
-            # Optional: Link Clicks
             "Link Clicks": df["Link clicks"].apply(lambda x: int(x) if pd.notna(x) else "N/A") if "Link clicks" in df.columns else ["N/A"] * len(df),
-            # Core Metrics for Logic
+            # Core Metrics
             "CPC (USD)": df["CPC (cost per link click) (USD)"].apply(lambda x: f"${x:.2f}" if pd.notna(x) else "N/A"),
             "ROAS": df["Purchase ROAS (return on ad spend)"].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A"),
             # Evaluation Results
-            "Kill Criteria Met? (Y/N)": df["Kill Criteria Met? (Y/N)"],
-            "Flag Reason": df["Flag Reason"],
-            "Action to Take": df["Flag Reason"].map(action_mapping).fillna("Review Manually"),
-            "Detailed Recommendation": df["Flag Reason"].apply(
-                lambda r: recommendations_by_stage[ad_stage].get(r, "Check metrics manually based on flag reason.")
+            "Flagged? (Y/N)": df["Flagged? (Y/N)"], # Y = Failed Criteria / Needs Action
+            "Result": df["Result"], # Keep, Fail, Insufficient Data
+            "Action to Take": df["Result"].map(action_mapping).fillna("Review Manually"),
+            "Recommendation": df["Result"].apply(
+                lambda r: recommendations_by_stage[ad_stage].get(r, "Check metrics manually.")
             ),
-            "Notes": "" # Add empty Notes column
+            "Notes": ""
         }
         review = pd.DataFrame(review_data)
 
 
         # --- Display Results in Streamlit ---
         st.subheader("📊 Summary")
-        flagged_count = (review['Kill Criteria Met? (Y/N)'] == 'Y').sum()
+        flagged_count = (review['Flagged? (Y/N)'] == 'Y').sum()
+        passed_count = (review['Result'] == 'Keep').sum()
         st.write(f"**Total Ads Processed:** {len(review)}")
-        st.write(f"**Ads Flagged for Action (Y):** {flagged_count}")
+        st.write(f"**✅ Ads Passing Criteria ('Keep'):** {passed_count}")
+        st.write(f"**❌ Ads Failing Criteria ('Fail'):** {flagged_count}")
 
-        # Highlighting function (adapted slightly for new flags)
+        # Highlighting function - Simplified
         def highlight_rows(row):
-            if row['Kill Criteria Met? (Y/N)'] == 'Y':
-                 # Distinguish between hard fails and 'review' flags
-                if row['Flag Reason'] in ["No Purchases", "High CPC"]: # Mockup/C1 High CPC might lead to kill
-                    color = '#ffe6e6' # Light Red (Pause/Kill)
-                elif row['Flag Reason'] == "High CPC (Converting)":
-                    color = '#ffffe0' # Light Yellow (Optimize/Review - different from Insufficient Data)
-                else:
-                    color = '#ffe6e6' # Default Red for other Y flags
-            elif row['Flag Reason'] == 'Insufficient Data':
-                color = '#e6f7ff' # Light Blue (Monitor - distinct from green/red/yellow)
-            else: # Keep
+            if row['Flagged? (Y/N)'] == 'Y': # Failed Criteria
+                color = '#ffe6e6' # Light Red
+            elif row['Result'] == 'Insufficient Data':
+                color = '#e6f7ff' # Light Blue
+            else: # Keep (Passed Criteria)
                 color = '#e6ffe6' # Light green
             return [f'background-color: {color}'] * len(row)
 
@@ -268,33 +259,22 @@ if uploaded_file:
             review.to_excel(writer, index=False, sheet_name="Ad Review")
             worksheet = writer.sheets["Ad Review"]
 
-            # Define fills for Excel conditional formatting
-            red_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid") # Light Red
-            green_fill = PatternFill(start_color="E6FFE6", end_color="E6FFE6", fill_type="solid") # Light Green
-            yellow_fill = PatternFill(start_color="FFFFE0", end_color="FFFFE0", fill_type="solid") # Light Yellow (Optimize/Review)
-            blue_fill = PatternFill(start_color="E6F7FF", end_color="E6F7FF", fill_type="solid") # Light Blue (Insufficient Data)
+            # Define fills for Excel
+            red_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid") # Fail
+            green_fill = PatternFill(start_color="E6FFE6", end_color="E6FFE6", fill_type="solid") # Keep/Pass
+            blue_fill = PatternFill(start_color="E6F7FF", end_color="E6F7FF", fill_type="solid") # Insufficient Data
 
-
-            kill_col_idx = review.columns.get_loc("Kill Criteria Met? (Y/N)") + 1
-            reason_col_idx = review.columns.get_loc("Flag Reason") + 1
+            flagged_col_idx = review.columns.get_loc("Flagged? (Y/N)") + 1
+            result_col_idx = review.columns.get_loc("Result") + 1
 
             for row_idx in range(2, len(review) + 2):
-                kill_val = worksheet.cell(row=row_idx, column=kill_col_idx).value
-                reason_val = worksheet.cell(row=row_idx, column=reason_col_idx).value
+                flagged_val = worksheet.cell(row=row_idx, column=flagged_col_idx).value
+                result_val = worksheet.cell(row=row_idx, column=result_col_idx).value
 
-                fill_to_apply = None # Default no fill
-                if reason_val == 'Insufficient Data':
-                    fill_to_apply = blue_fill
-                elif kill_val == 'Y':
-                    if reason_val in ["No Purchases", "High CPC"]:
-                         fill_to_apply = red_fill
-                    elif reason_val == "High CPC (Converting)":
-                         fill_to_apply = yellow_fill
-                    else: # Default for any other Y flag
-                        fill_to_apply = red_fill
-                elif kill_val == 'N' and reason_val == 'Keep':
-                    fill_to_apply = green_fill
-                # else: Keep default fill (None)
+                fill_to_apply = None
+                if result_val == 'Insufficient Data': fill_to_apply = blue_fill
+                elif flagged_val == 'Y': fill_to_apply = red_fill
+                elif flagged_val == 'N' and result_val == 'Keep': fill_to_apply = green_fill
 
                 if fill_to_apply:
                     for col_idx in range(1, len(review.columns) + 1):
@@ -302,11 +282,9 @@ if uploaded_file:
 
             # Auto-adjust column widths
             for col in worksheet.columns:
-                max_length = 0
-                column = col[0].column_letter
+                max_length = 0; column = col[0].column_letter
                 header_cell = worksheet[f"{column}1"]
-                if header_cell.value:
-                     max_length = len(str(header_cell.value))
+                if header_cell.value: max_length = len(str(header_cell.value))
                 for cell in col:
                     if cell.row == 1: continue
                     try:
@@ -315,7 +293,7 @@ if uploaded_file:
                             if cell_len > max_length: max_length = cell_len
                     except: pass
                 adjusted_width = (max_length + 2) * 1.2
-                if adjusted_width > 50: adjusted_width = 50
+                if adjusted_width > 60: adjusted_width = 60 # Slightly wider max width
                 worksheet.column_dimensions[column].width = adjusted_width
 
         st.download_button(
