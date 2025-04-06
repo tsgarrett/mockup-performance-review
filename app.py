@@ -118,11 +118,9 @@ if uploaded_file:
                 "Conversions (Purchases)": df["Purchase ROAS (return on ad spend)"].apply(lambda x: "N/A" if pd.isna(x) else x),
                 "ROAS": df["Purchase ROAS (return on ad spend)"],
                 "Kill Criteria Met? (Y/N)": df["Kill Criteria Met? (Y/N)"],
-                "Action to Take": df["Action Taken"],
-                "Notes": ["" for _ in range(len(df))]
+                "Action to Take": df["Action Taken"]
             })
 
-            # Add expanded recommendations
             review["Detailed Recommendation"] = review["Action to Take"].apply(
                 lambda action: detailed_recommendations.get(
                     action if not action.startswith("High CPC") else "High CPC",
@@ -130,7 +128,8 @@ if uploaded_file:
                 )
             )
 
-            # Summary
+            review["Notes"] = ""
+
             st.subheader("📊 Summary")
             total_ads = len(review)
             flagged = review["Kill Criteria Met? (Y/N)"].value_counts().get("Y", 0)
