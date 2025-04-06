@@ -10,17 +10,17 @@ st.set_page_config(page_title="Mockup Ad Review", layout="centered")
 if "upload_key" not in st.session_state:
     st.session_state.upload_key = 0
 
-st.title("📊 Weekly Mockup Ad Performance Review")
+st.title("📊 Mockup Ad Performance Review")
 st.markdown("""
 This tool helps you quickly analyze mockup ad performance from Facebook Ad reports.
 
-✅ Upload your report  
-✅ Select a CPC threshold  
-✅ Automatically flag underperforming ads  
-✅ Download a clean Weekly Review Sheet  
+✅ Step 1: Upload your report  
+✅ Step 2: Select a CPC threshold  
+✅ Step 3: We will automatically flag underperforming ads  
+✅ Step 4: Download your Mockup Ad Review Sheet
 
 ---
-**🔐 Your data is never stored.**  
+**🔐 Your data is never stored!**  
 All processing happens in your browser session. The file is cleared from memory after download.
 """)
 
@@ -41,7 +41,7 @@ if uploaded_file:
     st.subheader("Step 2: Select CPC Threshold")
     cpc_threshold = st.selectbox(
         "Choose the CPC ($) threshold used to flag underperforming ads:",
-        options=["Please select CPC threshold", 1.00, 1.25, 1.50],
+        options=["Please select CPC threshold", 1.00, 1.25, 1.50, 1.75, 2.00],
         index=0
     )
 
@@ -129,9 +129,9 @@ if uploaded_file:
                 review.to_excel(writer, index=False, sheet_name='Weekly Review')
 
             st.download_button(
-                label="📥 Download Weekly Review Sheet",
+                label="📥 Download Mockup Ad Review Sheet",
                 data=buffer.getvalue(),
-                file_name="Weekly_Review.xlsx",
+                file_name="Mockup_Review.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
