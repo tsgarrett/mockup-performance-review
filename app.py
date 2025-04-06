@@ -35,7 +35,7 @@ st.markdown("Applies the WeScale testing formulas with stage-specific defaults, 
 st.info(
     """
     **Disclaimer:** This tool is intended as an **aid** to your ad review process and should complement, **not replace**, your own judgment and analysis.
-    It was created by a member for members and is **not an official product of, nor endorsed by, the WeScale Group Founders.**
+    It was created by a member for members and is **not an official product of, nor endorsed by the WeScale Group Founders, coaches or support staff.**
     Always consider the full context of your campaigns when making decisions.
     """,
     icon="ℹ️"
