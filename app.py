@@ -8,21 +8,21 @@ from openpyxl.styles import PatternFill
 # Note: These are triggered based on the 'Flag Reason' determined by the logic below.
 recommendations_by_stage = {
     "Mockup": {
-        "Low CTR": "CTR is below threshold. Test radically different visuals or curiosity-driven headlines. [Ref: Stage 3 – 03:45:10]",
+        "Low CTR": "Link Click CTR is below threshold. Test radically different visuals or curiosity-driven headlines. [Ref: Stage 3 – 03:45:10]",
         "High CPC": "CPC above threshold in mockup phase. Consider stronger hooks or clearer visual cues. [Ref: Stage 3 – 03:52:10]",
-        "No engagement": "Spent over threshold with minimal/no clicks. Kill ad and test a fresh creative angle. [Ref: Stage 3 – 03:49:22]",
+        "No engagement": "Spent over threshold with minimal/no link clicks. Kill ad and test a fresh creative angle. [Ref: Stage 3 – 03:49:22]",
         "Keep": "Metrics look good for this stage. Consider moving into Cycle 1 if stable. [Ref: Stage 3 – 03:58:00]"
         # "Insufficient Data" will be handled separately
     },
     "Cycle 1": {
-        "Low CTR": "CTR below threshold. Try tightening your hook or using more urgency. [Ref: Stage 4 – 04:20:03]",
+        "Low CTR": "Link Click CTR below threshold. Try tightening your hook or using more urgency. [Ref: Stage 4 – 04:20:03]",
         "High CPC": "CPC is above your threshold. Adjust targeting or test broader audiences. [Ref: Stage 4 – 04:31:50]",
-        "No engagement": "Spent over threshold with minimal/no clicks. Kill ad or duplicate with bold creative shift. [Ref: Stage 4 – 04:12:45]",
+        "No engagement": "Spent over threshold with minimal/no link clicks. Kill ad or duplicate with bold creative shift. [Ref: Stage 4 – 04:12:45]",
         "Keep": "Good signals. Let it run and monitor CPC/CTR closely. [Ref: Stage 4 – 04:40:00]"
         # "Insufficient Data" will be handled separately
     },
     "Cycle 2": {
-        "Low CTR": "CTR below threshold for scaling. Consider fatigue or ad set saturation. [Ref: Stage 5 – 05:01:00]",
+        "Low CTR": "Link Click CTR below threshold for scaling. Consider fatigue or ad set saturation. [Ref: Stage 5 – 05:01:00]",
         "High CPC": "CPC too high for scaling. Restructure ad set or test budget split. [Ref: Stage 5 – 05:06:12]",
         "No ROAS": "Spent over threshold with no ROAS. Review funnel, page load time, and offer clarity. [Ref: Stage 5 – 05:02:17]",
         "Keep": "Strong performer. Consider scaling or cloning into new audience segments. [Ref: Stage 5 – 05:14:03]"
@@ -53,12 +53,12 @@ st.subheader("Step 1: Define Evaluation Thresholds")
 col1, col2 = st.columns(2)
 
 with col1:
-    # CTR threshold (configurable)
+    # CTR threshold (configurable) - Based on Link Click CTR now
     ctr_threshold_percent = st.number_input(
-        "Minimum Acceptable CTR (%)",
+        "Minimum Acceptable Link Click CTR (%)",
         min_value=0.0,
         max_value=100.0,
-        value=0.75, # Default value
+        value=0.75, # Default value - Adjust if needed for Link CTR context
         step=0.05,
         format="%.2f"
     )
@@ -92,17 +92,17 @@ with col2:
     )
 
 st.subheader("Step 2: Upload Your File")
-# Add a note about required columns and CTR type
+# Updated note about required columns and CTR type
 st.markdown(
     """
-    **Required columns:** `Ad name`, `Amount spent (USD)`, `CTR (all)`,
+    **Required columns:** `Ad name`, `Amount spent (USD)`, `CTR (link click-through rate)`,
     `CPC (cost per link click) (USD)`, `Link clicks`, `Purchase ROAS (return on ad spend)`.
 
-    *Note: The script currently uses `CTR (all)`. If your analysis requires **Link Click CTR**, please ensure your uploaded file has that column and adjust the `required_cols` list in the script if necessary.*
+    *Note: This script uses **CTR (link click-through rate)** for analysis. Ensure your Facebook export includes this exact column name.*
     """
 )
 uploaded_file = st.file_uploader(
-    "Upload your Excel file (.xlsx)",
+    "Upload your Facebook Ads Excel export (.xlsx)",
     type=["xlsx"],
     key=st.session_state.upload_key
 )
@@ -111,8 +111,9 @@ uploaded_file = st.file_uploader(
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file)
+        # UPDATED required_cols list
         required_cols = [
-            "Ad name", "Amount spent (USD)", "CTR (all)", # Verify if 'CTR (all)' is the desired metric
+            "Ad name", "Amount spent (USD)", "CTR (link click-through rate)", # Changed from CTR (all)
             "CPC (cost per link click) (USD)", "Link clicks",
             "Purchase ROAS (return on ad spend)"
         ]
@@ -122,20 +123,26 @@ if uploaded_file:
             st.stop()
 
         # Ensure numeric types where necessary, coerce errors to NaN
-        for col in ["Amount spent (USD)", "CTR (all)", "CPC (cost per link click) (USD)", "Link clicks", "Purchase ROAS (return on ad spend)"]:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+        # UPDATED to include the correct CTR column name
+        for col in ["Amount spent (USD)", "CTR (link click-through rate)", "CPC (cost per link click) (USD)", "Link clicks", "Purchase ROAS (return on ad spend)"]:
+             # Add check if column exists before converting, although 'missing' check should cover this
+            if col in df.columns:
+                 df[col] = pd.to_numeric(df[col], errors='coerce')
+            # No else needed here because the 'missing' check above would have stopped execution
 
-        # --- Evaluation Function (Corrected Logic) ---
+        # --- Evaluation Function (Corrected Logic & using Link Click CTR) ---
         def evaluate(row):
             spend = row["Amount spent (USD)"]
             # Use the configured CTR threshold (decimal)
-            ctr = row["CTR (all)"]
+            # UPDATED to use 'CTR (link click-through rate)'
+            ctr = row["CTR (link click-through rate)"]
             # Use the configured CPC threshold
             cpc = row["CPC (cost per link click) (USD)"]
-            clicks = row["Link clicks"]
+            clicks = row["Link clicks"] # Using 'Link clicks' count directly is robust for engagement check
             roas = row["Purchase ROAS (return on ad spend)"]
 
-            # Minimum number of clicks to consider engagement 'present' (can be adjusted)
+            # Minimum number of link clicks to consider engagement 'present'
+            # If Link clicks is 0 or NaN after spending threshold, flag as no engagement.
             min_clicks_for_engagement = 1
 
             if ad_stage == "Mockup":
@@ -143,18 +150,17 @@ if uploaded_file:
                 if spend < initial_spend_threshold:
                     return "N", "Insufficient Data" # Not enough spend yet
 
-                # Check 2: Spent threshold, but no engagement? (Prioritize this over low CTR)
-                # Check if clicks is NaN or below the minimum engagement level
+                # Check 2: Spent threshold, but no engagement (based on Link Clicks)?
                 if pd.isna(clicks) or clicks < min_clicks_for_engagement:
                     return "Y", "No engagement"
 
-                # Check 3: Low CTR?
-                # Check if CTR is NaN (should be caught by 'No engagement' if clicks=0) or below threshold
+                # Check 3: Low Link Click CTR?
+                # Check if Link Click CTR is NaN (unlikely if clicks >= 1, but good practice) or below threshold
                 if pd.isna(ctr) or ctr < ctr_threshold:
                     return "Y", "Low CTR"
 
                 # Check 4: High CPC?
-                # Check if CPC is NaN (less likely if clicks exist) or above threshold
+                # Check if CPC is NaN or above threshold
                 if pd.isna(cpc) or cpc > cpc_threshold:
                     return "Y", "High CPC"
 
@@ -166,11 +172,11 @@ if uploaded_file:
                 if spend < initial_spend_threshold:
                     return "N", "Insufficient Data" # Not enough spend yet
 
-                # Check 2: Spent threshold, but no engagement?
+                # Check 2: Spent threshold, but no engagement (based on Link Clicks)?
                 if pd.isna(clicks) or clicks < min_clicks_for_engagement:
                     return "Y", "No engagement"
 
-                # Check 3: Low CTR?
+                # Check 3: Low Link Click CTR?
                 if pd.isna(ctr) or ctr < ctr_threshold:
                     return "Y", "Low CTR"
 
@@ -187,11 +193,10 @@ if uploaded_file:
                     return "N", "Insufficient Data" # Not enough spend yet
 
                 # Check 2: No ROAS after significant spend? (Prioritize this in Cycle 2)
-                # Check if ROAS is NaN or explicitly zero (or below a minimum viable threshold if desired)
-                if pd.isna(roas) or roas <= 0: # Changed from == 0 to <= 0
+                if pd.isna(roas) or roas <= 0:
                     return "Y", "No ROAS"
 
-                # Check 3: Low CTR? (Still relevant for scaling health)
+                # Check 3: Low Link Click CTR? (Still relevant for scaling health)
                 if pd.isna(ctr) or ctr < ctr_threshold:
                     return "Y", "Low CTR"
 
@@ -224,9 +229,9 @@ if uploaded_file:
             "Date of Report": [date.today().strftime("%Y-%m-%d")] * len(df), # Format date
             "Ad Name": df["Ad name"],
             "Amount Spent (USD)": df["Amount spent (USD)"].round(2),
-            # Display CTR as percentage, handle NaN
-            "CTR (%)": df["CTR (all)"].apply(lambda x: f"{x*100:.2f}%" if pd.notna(x) else "N/A"),
-            # Handle NaN for clicks
+            # UPDATED: Display Link Click CTR as percentage, handle NaN
+            "Link CTR (%)": df["CTR (link click-through rate)"].apply(lambda x: f"{x*100:.2f}%" if pd.notna(x) else "N/A"),
+            # Handle NaN for clicks (using the Link clicks column)
             "Link Clicks": df["Link clicks"].apply(lambda x: int(x) if pd.notna(x) else "N/A"),
             # Round CPC, handle NaN
             "CPC (USD)": df["CPC (cost per link click) (USD)"].apply(lambda x: f"${x:.2f}" if pd.notna(x) else "N/A"),
@@ -236,7 +241,7 @@ if uploaded_file:
             "Flag Reason": df["Flag Reason"], # Show the reason determined by evaluate()
             # Apply the nuanced action mapping
             "Action to Take": df["Flag Reason"].map(action_mapping).fillna("Review Manually"),
-            # Get recommendation based on stage and flag reason
+            # Get recommendation based on stage and flag reason (recommendation text updated slightly for clarity)
             "Detailed Recommendation": df["Flag Reason"].apply(
                 lambda r: recommendations_by_stage[ad_stage].get(r, "Check metrics manually based on flag reason.") # Provide fallback
             ),
@@ -302,13 +307,27 @@ if uploaded_file:
             for col in worksheet.columns:
                 max_length = 0
                 column = col[0].column_letter # Get the column name like 'A'
+                # Adjust max_length check to include header
+                header_cell = worksheet[f"{column}1"]
+                if header_cell.value:
+                     max_length = len(str(header_cell.value))
+
                 for cell in col:
+                     # Skip header row as it's already checked
+                    if cell.row == 1:
+                        continue
                     try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(cell.value)
+                        if cell.value:
+                            cell_len = len(str(cell.value))
+                            if cell_len > max_length:
+                                max_length = cell_len
                     except:
                         pass
+                # Add padding to max_length
                 adjusted_width = (max_length + 2) * 1.2
+                # Set a reasonable max width
+                if adjusted_width > 50:
+                    adjusted_width = 50
                 worksheet.column_dimensions[column].width = adjusted_width
 
 
@@ -319,6 +338,11 @@ if uploaded_file:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
+    except FileNotFoundError:
+        st.error("Uploaded file not found. Please ensure the file was uploaded correctly.")
+    except KeyError as e:
+         st.error(f"Missing expected column in the uploaded file: {e}. Please ensure your file includes all required columns with the exact names specified.")
+         st.info(f"Required columns are: {', '.join(required_cols)}")
     except Exception as e:
         st.error(f"An error occurred during processing: {e}")
         st.exception(e) # Show full traceback for debugging if needed
@@ -326,5 +350,6 @@ if uploaded_file:
 # --- Start Over Button ---
 st.divider()
 if st.button("🔄 Start Over / Upload New File"):
+    # Clear previous errors or results by forcing a full rerun
     st.session_state.upload_key += 1 # Change key to force re-render of file_uploader
     st.rerun()
